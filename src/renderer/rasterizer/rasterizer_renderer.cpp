@@ -1,5 +1,6 @@
 #include "rasterizer_renderer.h"
 
+#include "linalg.h"
 #include "utils/resource_utils.h"
 
 
@@ -9,7 +10,6 @@ void cg::renderer::rasterization_renderer::init()
 	rasterizer->set_viewport(settings->width, settings->height);
 
 	render_target = std::make_shared<cg::resource<cg::unsigned_color>>(settings->width, settings->height);
-	rasterizer->set_render_target(render_target);
 
 	model = std::make_shared<cg::world::model>();
 	model->load_obj(settings->model_path);
@@ -28,7 +28,8 @@ void cg::renderer::rasterization_renderer::init()
 	camera->set_z_near(settings->camera_z_near);
 	camera->set_z_far(settings->camera_z_far);
 
-	// TODO Lab: 1.06 Add depth buffer in `cg::renderer::rasterization_renderer`
+	depth_buffer = std::make_shared<resource<float>>(settings->width, settings->height);
+	rasterizer->set_render_target(render_target, depth_buffer);
 }
 void cg::renderer::rasterization_renderer::render()
 {
@@ -45,18 +46,31 @@ void cg::renderer::rasterization_renderer::render()
 		auto processed = mul(matrix, vertex);
 		return std::make_pair(processed, vertex_data);
 	};
-	rasterizer->pixel_shader = [](cg::vertex vertex_data, float z) {
+	rasterizer->pixel_shader = [this](cg::vertex vertex_data, float z, float min_z, float max_z) {
+		float z_mul = 0.f;
+	    if (settings->fake_depth) {
+			z_mul = (min_z != max_z ? ((z - min_z) / (max_z - min_z)) : 0.5f) - 0.5f;
+	    }
+
+		float r = fmax(fmin(0.95f, vertex_data.ambient_r), 0.05f);
+		float g = fmax(fmin(0.95f, vertex_data.ambient_g), 0.05f);
+		float b = fmax(fmin(0.95f, vertex_data.ambient_b), 0.05f);
+
+		float range_r = fmin(fmin(1 - r, r), 0.37f) * 2;
+		float range_g = fmin(fmin(1 - g, g), 0.37f) * 2;
+		float range_b = fmin(fmin(1 - b, b), 0.37f) * 2;
+
 		return cg::color{
-				vertex_data.ambient_r,
-				vertex_data.ambient_g,
-				vertex_data.ambient_b,
+				r + (-z_mul * range_r),
+				g + (-z_mul * range_g),
+				b + (-z_mul * range_b),
 		};
 	};
 
 	for (size_t shape_id = 0; shape_id < model->get_index_buffers().size(); ++shape_id) {
 		rasterizer->set_vertex_buffer(model->get_vertex_buffers()[shape_id]);
 		rasterizer->set_index_buffer(model->get_index_buffers()[shape_id]);
-		rasterizer->draw(model->get_index_buffers()[shape_id]->get_number_of_elements(), 0);
+		rasterizer->draw(model->get_index_buffers()[shape_id]->get_number_of_elements(), 0, settings->show_lines);
 	}
 
 //	auto end = std::chrono::high_resolution_clock::now();

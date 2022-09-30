@@ -25,6 +25,8 @@ std::shared_ptr<settings> cg::settings::parse_settings(int argc, char** argv)
 	add_options("result_path", "Path to resulted image", cxxopts::value<std::filesystem::path>()->default_value("result.png"));
 	add_options("raytracing_depth", "Maximum number of traces rays", cxxopts::value<unsigned>()->default_value("1"));
 	add_options("accumulation_num", "Number of accumulated frames", cxxopts::value<unsigned>()->default_value("1"));
+	add_options("fake_depth", "Render faked depth");
+	add_options("show_lines", "Show edges of polygons");
 	add_options("h,help", "Print usage");
 
 	auto result = options.parse(argc, argv);
@@ -46,6 +48,8 @@ std::shared_ptr<settings> cg::settings::parse_settings(int argc, char** argv)
 	settings->result_path = result["result_path"].as<std::filesystem::path>();
 	settings->raytracing_depth = result["raytracing_depth"].as<unsigned>();
 	settings->accumulation_num = result["accumulation_num"].as<unsigned>();
+	settings->fake_depth = result.count("fake_depth") > 0;
+	settings->show_lines = result.count("show_lines") > 0;
 
 	return settings;
 }
