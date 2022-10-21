@@ -46,25 +46,28 @@ void cg::renderer::ray_tracing_renderer::render()
 	raytracer->clear_render_target({0, 0, 0});
 	raytracer->miss_shader = [](const ray& ray) {
 		payload payload{};
-		payload.color = {0.f, 0.f, (ray.direction.y + 1.f) * 0.5f};
+//		payload.color = {0.f, 0.f, (ray.direction.y + 1.f) * 0.5f};
+		payload.color = {0.f, 0.f, 0.f};
 		return payload;
 	};
 	shadow_raytracer->miss_shader = [](const ray& ray) {
 	  return payload{.t = -1.f};
 	};
+	std::random_device random_device;
+	std::mt19937  random_generator(random_device());
+	std::uniform_real_distribution uniform_distribution(-1.f, 1.f);
 
 	raytracer->closest_hit_shader = [&](const ray& ray, payload& payload, const triangle<cg::vertex>& triangle, size_t depth) {
 		float3 normal = normalize(payload.bary.x * triangle.na + payload.bary.y * triangle.nb + payload.bary.z * triangle.nc);
-
-		float3 result_color = triangle.emissive;
-		for (auto & light : lights) {
-			float3 position = ray.position + payload.t * ray.direction;
-			cg::renderer::ray to_light(position, light.position - position);
-			auto shadow_payload = shadow_raytracer->trace_ray(to_light, 1, length(light.position - position));
-			if (shadow_payload.t < 0.f) {
-				result_color += triangle.diffuse * light.color * std::max(dot(normal, to_light.direction), 0.f);
-			}
+		float3 random_direction {uniform_distribution(random_generator), uniform_distribution(random_generator), uniform_distribution(random_generator)};
+		float3 position = ray.position + payload.t * ray.direction;
+		if (dot(normal, random_direction) < 0.f) {
+			random_direction = -random_direction;
 		}
+		cg::renderer::ray to_next_object(position, random_direction);
+		auto payload_next = raytracer->trace_ray(to_next_object, depth);
+		float3 result_color = triangle.emissive;
+		result_color += triangle.diffuse * payload_next.color.to_float3() * std::max(dot(normal, to_next_object.direction), 0.f);
 		payload.color = cg::color::from_float3(result_color);
 		return payload;
 	};
