@@ -3,7 +3,49 @@
 #include "utils/resource_utils.h"
 
 #include <iostream>
+#include <random>
 
+std::mt19937 mt;
+std::uniform_real_distribution<float> dist(0.f, 1.f);
+
+float3x3 angleAxis3x3(float angle, float3 axis)
+{
+	float c = cos(angle), s = sin(angle);
+
+	float t = 1 - c;
+	float x = axis.x;
+	float y = axis.y;
+	float z = axis.z;
+
+	return float3x3{
+			{t * x * x + c, t * x * y - s * z, t * x * z + s * y},
+			{t * x * y + s * z, t * y * y + c, t * y * z - s * x},
+			{t * x * z - s * y, t * y * z + s * x, t * z * z + c}};
+}
+
+float3 getConeSample(float3 direction, float coneAngle) {
+
+	float cosAngle = cos(coneAngle);
+
+	// Generate points on the spherical cap around the north pole [1].
+	// [1] See https://math.stackexchange.com/a/205589/81266
+	float z =  dist(mt) * (1.0f - cosAngle) + cosAngle;
+	float phi =  dist(mt) * 2.0f * 3.1415926f;
+
+	float x = sqrt(1.0f - z * z) * cos(phi);
+	float y = sqrt(1.0f - z * z) * sin(phi);
+	float3 north = float3(0.f, 0.f, 1.f);
+
+	// Find the rotation axis `u` and rotation angle `rot` [1]
+	float3 axis = normalize(cross(north, normalize(direction)));
+	float angle = acos(dot(normalize(direction), north));
+
+	// Convert rotation axis and angle to 3x3 rotation matrix [2]
+	float3x3 R = angleAxis3x3(angle, axis);
+
+	auto res = mul(R, float3(x, y, z));
+	return {-res.x, -res.y, res.z};
+}
 
 void cg::renderer::ray_tracing_renderer::init()
 {
@@ -60,10 +102,17 @@ void cg::renderer::ray_tracing_renderer::render()
 		for (auto & light : lights) {
 			float3 position = ray.position + payload.t * ray.direction;
 			cg::renderer::ray to_light(position, light.position - position);
-			auto shadow_payload = shadow_raytracer->trace_ray(to_light, 1, length(light.position - position));
-			if (shadow_payload.t < 0.f) {
-				result_color += triangle.diffuse * light.color * std::max(dot(normal, to_light.direction), 0.f);
+			float3 perpL = cross(to_light.direction, float3(0.f, 1.0f, 0.f)); // get perpendicular to light direction
+			if (perpL.x == 0.f && perpL.y == 0.f && perpL.z == 0.f) {
+				perpL.x = 1.f;
 			}
+			float3 toLightEdge = normalize((light.position + perpL * 0.05f) - position);
+			float coneAngle = acos(dot(to_light.direction, toLightEdge)) * 2.0f;
+
+			cg::renderer::ray appr_to_light(position, getConeSample(light.position - position, coneAngle));
+
+			auto shadow_payload = shadow_raytracer->trace_ray(appr_to_light, 1, length(light.position - position) - 0.05f);
+			result_color += triangle.diffuse * light.color * std::max(dot(normal, to_light.direction), 0.125f) * (shadow_payload.t < 0.f ? 1.f : 0.125f);
 		}
 		payload.color = cg::color::from_float3(result_color);
 		return payload;
