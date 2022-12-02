@@ -226,7 +226,7 @@ ComPtr<ID3DBlob> cg::renderer::dx12_renderer::compile_shader(const std::filesyst
 void cg::renderer::dx12_renderer::create_pso(const std::string& shader_name)
 {
 	ComPtr<ID3DBlob> vertex_shader = compile_shader(get_shader_path(shader_name), "VSMain", "vs_5_0");
-	ComPtr<ID3DBlob> pixel_shader = compile_shader(get_shader_path(shader_name), "PSMain", "vs_5_0");
+	ComPtr<ID3DBlob> pixel_shader = compile_shader(get_shader_path(shader_name), "PSMain", "ps_5_0");
 
 	D3D12_INPUT_ELEMENT_DESC input_descriptors[] = {
 			{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
